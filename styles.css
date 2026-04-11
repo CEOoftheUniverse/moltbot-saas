@@ -345,3 +345,55 @@ body {
 .detail-row span:first-child {
     color: var(--text-muted);
 }
+
+/* --- Responsive --- */
+@media (max-width: 1024px) {
+    .tier-cards {
+        flex-direction: column;
+        align-items: center;
+    }
+    .pricing-card {
+        max-width: 400px;
+        width: 100%;
+    }
+    .dashboard-content {
+        padding: 2rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 1rem;
+        gap: 1rem;
+    }
+    .sidebar nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    .sidebar nav a {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    .availability-card {
+        margin-top: 0;
+        width: 100%;
+    }
+    .dashboard-content {
+        padding: 1.5rem;
+    }
+    .provisioning-section h1 {
+        font-size: 1.8rem;
+    }
+    .instances-grid {
+        grid-template-columns: 1fr;
+    }
+    .waitlist-form-container form > div {
+        flex-direction: column;
+    }
+}

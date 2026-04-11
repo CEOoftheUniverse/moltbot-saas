@@ -3,8 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MoltBot Cloud — Autonomous AI Agent Fleet</title>
-  <meta name="description" content="Deploy autonomous AI agent swarms on dedicated GPU VMs. Pre-configured OpenClaw agents with Claude, GPT, Gemini. From $49/mo.">
+  <title>MoltBot Cloud — Autonomous AI Agent Fleet | GPU VM Hosting</title>
+  <meta name="description" content="Deploy autonomous AI agent swarms on dedicated GPU VMs. Pre-configured OpenClaw agents with Claude 4.6, GPT-5.4, Gemini 2.5 Pro. From $49/mo. Join the waitlist.">
+  <meta name="keywords" content="AI agent hosting, GPU VM rental, autonomous AI fleet, OpenClaw agents, Claude GPT Gemini, AI swarm deployment">
+  <meta property="og:title" content="MoltBot Cloud — Autonomous AI Agent Fleet">
+  <meta property="og:description" content="Deploy AI agent swarms on dedicated GPUs. Claude, GPT, Gemini pre-configured. From $49/mo.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://ceooftheuniverse.github.io/moltbot-saas/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MoltBot Cloud — Autonomous AI Agent Fleet">
+  <meta name="twitter:description" content="Deploy AI agent swarms on dedicated GPUs. From $49/mo.">
+  <link rel="canonical" href="https://ceooftheuniverse.github.io/moltbot-saas/">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -161,10 +170,22 @@
       e.preventDefault();
       const email = document.getElementById('waitlist-email').value;
       const tier = document.getElementById('waitlist-tier').value;
-      // Store locally for now (can be replaced with real backend)
+      const entry = { email, tier, ts: new Date().toISOString(), source: 'moltbot-saas' };
+      
+      // Store locally
       const entries = JSON.parse(localStorage.getItem('moltbot_waitlist') || '[]');
-      entries.push({ email, tier, ts: new Date().toISOString() });
+      entries.push(entry);
       localStorage.setItem('moltbot_waitlist', JSON.stringify(entries));
+      
+      // Also try to POST to webhook (fire and forget)
+      try {
+        fetch('https://hook.us1.make.com/moltbot-waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(entry)
+        }).catch(() => {}); // Silent fail — localStorage is the backup
+      } catch(e) {}
+      
       document.getElementById('waitlist-form').style.display = 'none';
       document.getElementById('waitlist-success').style.display = 'block';
     }
