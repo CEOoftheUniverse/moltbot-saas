@@ -173,6 +173,7 @@
       <section class="active-instances" id="waitlist">
         <h2>🚀 Join the Early Access Waitlist</h2>
         <p style="color: var(--text-muted); margin-bottom: 1.5rem; max-width: 600px;">Be first to deploy autonomous AI agent swarms. We're onboarding early users now — limited spots per GPU tier.</p>
+        <p id="waitlist-count" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; opacity: 0.7;"></p>
         <div class="waitlist-form-container">
           <form id="waitlist-form" onsubmit="handleWaitlist(event)">
             <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
@@ -228,33 +229,129 @@
   </div>
 
   <script>
+    // ---------------------------------------------------------------------------
+    // API Configuration — set MOLTBOT_API_BASE to your backend URL
+    // When backend is unreachable, falls back to localStorage demo mode
+    // ---------------------------------------------------------------------------
+    const MOLTBOT_API_BASE = window.MOLTBOT_API_BASE || '/api';
+    let _backendAvailable = null; // null = unknown, true/false after first check
+
+    // Probe backend availability on load
+    (async function probeBackend() {
+      try {
+        const r = await fetch(`${MOLTBOT_API_BASE}/status`, { signal: AbortSignal.timeout(3000) });
+        if (r.ok) {
+          _backendAvailable = true;
+          const data = await r.json();
+          // Update waitlist count if available
+          if (data.waitlistCount != null) {
+            const el = document.getElementById('waitlist-count');
+            if (el) el.textContent = `${data.waitlistCount} people already joined`;
+          }
+          console.log('[MoltBot] Backend connected:', data.version, '| Stripe:', data.stripeConfigured ? 'ready' : 'waitlist-only');
+        } else { _backendAvailable = false; }
+      } catch { _backendAvailable = false; }
+      if (!_backendAvailable) console.log('[MoltBot] Backend unavailable — running in demo mode (localStorage)');
+    })();
+
+    // Helper: POST to API with fallback to localStorage
+    async function apiPost(endpoint, body) {
+      if (_backendAvailable === false) return { offline: true };
+      try {
+        const r = await fetch(`${MOLTBOT_API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(8000)
+        });
+        const data = await r.json();
+        if (!r.ok) return { error: data.error || `HTTP ${r.status}`, hint: data.hint, status: r.status };
+        return data;
+      } catch (err) {
+        console.warn(`[MoltBot] API ${endpoint} failed:`, err.message);
+        return { offline: true };
+      }
+    }
+
     function scrollToWaitlist() {
       document.getElementById('waitlist').scrollIntoView({ behavior: 'smooth' });
       document.getElementById('waitlist-email').focus();
     }
-    function handleWaitlist(e) {
+
+    async function handleWaitlist(e) {
       e.preventDefault();
-      const email = document.getElementById('waitlist-email').value;
+      const email = document.getElementById('waitlist-email').value.trim();
       const tier = document.getElementById('waitlist-tier').value;
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Joining...';
+
+      // Always save locally as backup
       const entry = { email, tier, ts: new Date().toISOString(), source: 'moltbot-saas' };
-      
-      // Store locally
       const entries = JSON.parse(localStorage.getItem('moltbot_waitlist') || '[]');
       entries.push(entry);
       localStorage.setItem('moltbot_waitlist', JSON.stringify(entries));
-      
-      // Also try to POST to webhook (fire and forget)
-      try {
-        fetch('https://hook.us1.make.com/moltbot-waitlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(entry)
-        }).catch(() => {}); // Silent fail — localStorage is the backup
-      } catch(e) {}
-      
+
+      // Try backend API
+      const result = await apiPost('/waitlist', { email, tier });
+
+      const successEl = document.getElementById('waitlist-success');
+      if (result.offline) {
+        // Demo mode — show success with local note
+        successEl.innerHTML = '<span style="color: #22c55e; font-weight: 600;">✓ You\'re on the list!</span> We\'ll reach out when your GPU tier is available.';
+      } else if (result.error) {
+        successEl.innerHTML = `<span style="color: #f59e0b; font-weight: 600;">⚠ ${result.error}</span>`;
+      } else {
+        const pos = result.position ? ` Position #${result.position} of ${result.total || result.position}.` : '';
+        successEl.innerHTML = `<span style="color: #22c55e; font-weight: 600;">✓ ${result.message || 'You\'re on the list!'}</span>${pos} We'll reach out when your GPU tier is available.`;
+      }
+
       document.getElementById('waitlist-form').style.display = 'none';
-      document.getElementById('waitlist-success').style.display = 'block';
+      successEl.style.display = 'block';
     }
+
+    // Stripe checkout — called when user clicks a pricing button to subscribe
+    async function startCheckout(tier) {
+      // If backend has Stripe configured, redirect to Stripe Checkout
+      const email = localStorage.getItem('moltbot_checkout_email');
+      if (!email) {
+        // Need email first — scroll to waitlist
+        scrollToWaitlist();
+        document.getElementById('waitlist-tier').value = tier === 'swarm' ? 'swarm' : tier === 'pro' ? 'pro' : 'base';
+        return;
+      }
+
+      const result = await apiPost('/billing/checkout', { email, tier });
+      if (result.url) {
+        window.location.href = result.url; // Redirect to Stripe Checkout
+      } else if (result.hint === 'stripe_not_configured') {
+        // Stripe not ready — fall back to waitlist
+        scrollToWaitlist();
+      } else if (result.offline) {
+        scrollToWaitlist();
+      } else {
+        alert(result.error || 'Checkout unavailable. Please join the waitlist instead.');
+        scrollToWaitlist();
+      }
+    }
+
+    // Check for Stripe checkout return
+    (function checkCheckoutReturn() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('checkout') === 'success') {
+        const successEl = document.getElementById('waitlist-success');
+        if (successEl) {
+          successEl.innerHTML = '<span style="color: #22c55e; font-weight: 600;">🎉 Payment successful!</span> Your agent fleet is being provisioned. Check your email for access details.';
+          successEl.style.display = 'block';
+          const form = document.getElementById('waitlist-form');
+          if (form) form.style.display = 'none';
+        }
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (params.get('checkout') === 'cancel') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    })();
   </script>
 </body>
 </html>

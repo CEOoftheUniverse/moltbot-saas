@@ -1,6 +1,6 @@
 // MoltBot Cloud - Frontend Logic
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = window.MOLTBOT_API_BASE || '/api';
 
 // Initialize Dashboard
 document.addEventListener('DOMContentLoaded', () => {
