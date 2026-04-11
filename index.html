@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MoltBot Cloud — Autonomous VM Fleet</title>
+  <title>MoltBot Cloud — Autonomous AI Agent Fleet</title>
+  <meta name="description" content="Deploy autonomous AI agent swarms on dedicated GPU VMs. Pre-configured OpenClaw agents with Claude, GPT, Gemini. From $49/mo.">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
   <div class="app-container">
     <!-- Sidebar Navigation -->
@@ -18,16 +17,15 @@
       </div>
       <nav>
         <a href="#" class="active">Fleet Dashboard</a>
-        <a href="#">Agent Images</a>
-        <a href="#">Billing & Invoices</a>
-        <a href="#">Settings</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#waitlist">Join Waitlist</a>
+        <a href="https://ceooftheuniverse.github.io/omnisphere/" target="_blank">Omnisphere ↗</a>
       </nav>
-
       <div class="availability-card">
         <h3>Global Compute</h3>
-        <div class="stat-row"><span>RTX 4090 (24GB)</span> <span id="gpu-4090" class="neon-number">...</span></div>
-        <div class="stat-row"><span>A100 (80GB)</span> <span id="gpu-a100" class="neon-number">...</span></div>
-        <div class="stat-row"><span>H100 (80GB)</span> <span id="gpu-h100" class="neon-number">...</span></div>
+        <div class="stat-row"><span>RTX 4090 (24GB)</span> <span class="neon-number">47</span></div>
+        <div class="stat-row"><span>A100 (80GB)</span> <span class="neon-number">12</span></div>
+        <div class="stat-row"><span>H100 (80GB)</span> <span class="neon-number">8</span></div>
       </div>
     </aside>
 
@@ -37,12 +35,12 @@
         <div class="status-indicator">
           <span class="pulsing-dot"></span> System Operational
         </div>
-        <div class="user-profile">Administrator</div>
+        <div class="user-profile">Early Access — April 2026</div>
       </header>
 
-      <section class="provisioning-section">
+      <section class="provisioning-section" id="pricing">
         <h1>Deploy Autonomous Swarm</h1>
-        <p class="subtitle">Select your compute tier to instantiate a pre-configured OpenClaw agent container.</p>
+        <p class="subtitle">Select your compute tier to instantiate a pre-configured OpenClaw agent container with the latest AI models.</p>
 
         <div class="tier-cards">
           <!-- Base Plan -->
@@ -52,11 +50,29 @@
               <span class="price">$49<small>/mo</small></span>
             </div>
             <ul class="features">
-              <li>1x Persistent Agent (MoltBot Core)</li>
-              <li>Llama 3.3 70B Included (NIM API)</li>
+              <li>1× Persistent Agent (OpenClaw Core)</li>
+              <li>Qwen 3.5 Local + Claude Sonnet 4 API</li>
               <li>RTX 4090 Dedicated VRAM</li>
+              <li>24/7 Autonomous Execution</li>
+              <li>10GB Persistent Storage</li>
             </ul>
-            <button class="deploy-btn" onclick="deployAgent('base')">Deploy Base VM</button>
+            <button class="deploy-btn" onclick="scrollToWaitlist()">Join Waitlist →</button>
+          </div>
+
+          <!-- Pro Plan -->
+          <div class="card pricing-card">
+            <div class="tier-header">
+              <h3>Pro Agent</h3>
+              <span class="price">$149<small>/mo</small></span>
+            </div>
+            <ul class="features">
+              <li>3× Concurrent Agents</li>
+              <li>Claude Opus 4.6 + GPT-5.4 + Gemini 2.5 Pro</li>
+              <li>A100 80GB Dedicated</li>
+              <li>Smart Model Routing</li>
+              <li>50GB Persistent Storage</li>
+            </ul>
+            <button class="deploy-btn" onclick="scrollToWaitlist()">Join Waitlist →</button>
           </div>
 
           <!-- Swarm Plan -->
@@ -67,30 +83,91 @@
               <span class="price">$299<small>/mo</small></span>
             </div>
             <ul class="features">
-              <li>10x Concurrent Agents (OpenClaw)</li>
-              <li>Claude 3.5 Sonnet Integration</li>
-              <li>Cluster 4x H100 Node Routing</li>
+              <li>10× Concurrent Agents (Full Orchestra)</li>
+              <li>All 7 AI Models (Claude, GPT, Gemini, Kimi, Grok, Qwen, DeepSeek)</li>
+              <li>Cluster 4× H100 Node Routing</li>
+              <li>Visual Pipeline Builder (Omnisphere)</li>
+              <li>200GB Storage + Priority Support</li>
             </ul>
-            <button class="deploy-btn primary" onclick="deployAgent('swarm')">Initialize Swarm Matrix</button>
+            <button class="deploy-btn primary" onclick="scrollToWaitlist()">Join Waitlist →</button>
           </div>
         </div>
       </section>
 
-      <!-- Active Deployments -->
-      <section class="active-instances">
-        <h2>Active Fleet Deployments</h2>
-        <div class="instances-grid" id="instances-container">
-          <!-- Dynamic Server Cards go here -->
+      <!-- Waitlist Section -->
+      <section class="active-instances" id="waitlist">
+        <h2>🚀 Join the Early Access Waitlist</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem; max-width: 600px;">Be first to deploy autonomous AI agent swarms. We're onboarding early users now — limited spots per GPU tier.</p>
+        <div class="waitlist-form-container">
+          <form id="waitlist-form" onsubmit="handleWaitlist(event)">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              <input type="email" id="waitlist-email" placeholder="your@email.com" required
+                style="flex: 1; min-width: 250px; padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--panel-bg); color: white; font-family: 'Inter', sans-serif; font-size: 1rem;">
+              <select id="waitlist-tier" style="padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--panel-bg); color: white; font-family: 'Inter', sans-serif;">
+                <option value="base">Base Worker ($49/mo)</option>
+                <option value="pro">Pro Agent ($149/mo)</option>
+                <option value="swarm" selected>Swarm Matrix ($299/mo)</option>
+              </select>
+              <button type="submit" class="deploy-btn primary" style="padding: 1rem 2rem; white-space: nowrap;">Reserve Spot</button>
+            </div>
+          </form>
+          <div id="waitlist-success" style="display: none; padding: 1.5rem; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px; margin-top: 1rem;">
+            <span style="color: #22c55e; font-weight: 600;">✓ You're on the list!</span> We'll reach out when your GPU tier is available.
+          </div>
         </div>
       </section>
 
+      <!-- Demo Instances -->
+      <section class="active-instances" style="margin-top: 2rem;">
+        <h2>Active Fleet Deployments (Demo)</h2>
+        <div class="instances-grid">
+          <div class="instance-card">
+            <div class="instance-header">
+              <span class="instance-id">molt-swarm-7a3f</span>
+              <span class="badge running">running</span>
+            </div>
+            <div class="instance-details">
+              <div class="detail-row"><span>IP Gateway</span><span style="color: #38bdf8; font-family: monospace;">10.0.4.92</span></div>
+              <div class="detail-row"><span>Plan Tier</span><span>Swarm Matrix</span></div>
+              <div class="detail-row"><span>Burn Rate</span><span>$0.41/hr</span></div>
+              <div class="detail-row"><span>Active Agents</span><span>10</span></div>
+              <div class="detail-row"><span>Models</span><span>Claude 4.6 + GPT-5.4 + 5 more</span></div>
+            </div>
+          </div>
+          <div class="instance-card">
+            <div class="instance-header">
+              <span class="instance-id">molt-base-d81e</span>
+              <span class="badge running">running</span>
+            </div>
+            <div class="instance-details">
+              <div class="detail-row"><span>IP Gateway</span><span style="color: #38bdf8; font-family: monospace;">10.0.2.14</span></div>
+              <div class="detail-row"><span>Plan Tier</span><span>Base Worker</span></div>
+              <div class="detail-row"><span>Burn Rate</span><span>$0.07/hr</span></div>
+              <div class="detail-row"><span>Active Agents</span><span>1</span></div>
+              <div class="detail-row"><span>Models</span><span>Qwen 3.5 + Claude Sonnet 4</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
-  <!-- Toast Notifications -->
-  <div id="toast-container"></div>
-
-  <script src="app.js"></script>
+  <script>
+    function scrollToWaitlist() {
+      document.getElementById('waitlist').scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('waitlist-email').focus();
+    }
+    function handleWaitlist(e) {
+      e.preventDefault();
+      const email = document.getElementById('waitlist-email').value;
+      const tier = document.getElementById('waitlist-tier').value;
+      // Store locally for now (can be replaced with real backend)
+      const entries = JSON.parse(localStorage.getItem('moltbot_waitlist') || '[]');
+      entries.push({ email, tier, ts: new Date().toISOString() });
+      localStorage.setItem('moltbot_waitlist', JSON.stringify(entries));
+      document.getElementById('waitlist-form').style.display = 'none';
+      document.getElementById('waitlist-success').style.display = 'block';
+    }
+  </script>
 </body>
-
 </html>
