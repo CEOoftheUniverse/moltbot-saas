@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a14"/>
+      <stop offset="100%" style="stop-color:#111128"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff88"/>
+      <stop offset="50%" style="stop-color:#0ea5e9"/>
+      <stop offset="100%" style="stop-color:#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <text x="600" y="200" text-anchor="middle" font-family="system-ui, sans-serif" font-size="64" font-weight="700" fill="url(#accent)">MoltBot Cloud</text>
+  <text x="600" y="280" text-anchor="middle" font-family="system-ui, sans-serif" font-size="30" fill="#ffffff" opacity="0.7">Autonomous AI Agent Fleet</text>
+  <text x="600" y="350" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" fill="#ffffff" opacity="0.4">Deploy AI swarms on dedicated GPU VMs — Claude • GPT • Gemini • 7 Models</text>
+  <text x="600" y="410" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" fill="#0ea5e9" opacity="0.8">24/7 Autonomous Execution | Smart Model Routing | From $49/mo</text>
+  <rect x="420" y="460" width="360" height="50" rx="10" fill="url(#accent)" opacity="0.9"/>
+  <text x="600" y="492" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="600" fill="#ffffff">Join Early Access Waitlist</text>
+</svg>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoltBot Cloud — Autonomous VM Fleet</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h2>MoltBot <span>Cloud</span></h2>
+      </div>
+      <nav>
+        <a href="#" class="active">Fleet Dashboard</a>
+        <a href="#">Agent Images</a>
+        <a href="#">Billing & Invoices</a>
+        <a href="#">Settings</a>
+      </nav>
+
+      <div class="availability-card">
+        <h3>Global Compute</h3>
+        <div class="stat-row"><span>RTX 4090 (24GB)</span> <span id="gpu-4090" class="neon-number">...</span></div>
+        <div class="stat-row"><span>A100 (80GB)</span> <span id="gpu-a100" class="neon-number">...</span></div>
+        <div class="stat-row"><span>H100 (80GB)</span> <span id="gpu-h100" class="neon-number">...</span></div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="dashboard-content">
+      <header class="top-bar">
+        <div class="status-indicator">
+          <span class="pulsing-dot"></span> System Operational
+        </div>
+        <div class="user-profile">Administrator</div>
+      </header>
+
+      <section class="provisioning-section">
+        <h1>Deploy Autonomous Swarm</h1>
+        <p class="subtitle">Select your compute tier to instantiate a pre-configured OpenClaw agent container.</p>
+
+        <div class="tier-cards">
+          <!-- Base Plan -->
+          <div class="card pricing-card">
+            <div class="tier-header">
+              <h3>Base Worker</h3>
+              <span class="price">$49<small>/mo</small></span>
+            </div>
+            <ul class="features">
+              <li>1x Persistent Agent (MoltBot Core)</li>
+              <li>Llama 3.3 70B Included (NIM API)</li>
+              <li>RTX 4090 Dedicated VRAM</li>
+            </ul>
+            <button class="deploy-btn" onclick="deployAgent('base')">Deploy Base VM</button>
+          </div>
+
+          <!-- Swarm Plan -->
+          <div class="card pricing-card featured">
+            <div class="ribbon">ENTERPRISE</div>
+            <div class="tier-header">
+              <h3>Swarm Matrix</h3>
+              <span class="price">$299<small>/mo</small></span>
+            </div>
+            <ul class="features">
+              <li>10x Concurrent Agents (OpenClaw)</li>
+              <li>Claude 3.5 Sonnet Integration</li>
+              <li>Cluster 4x H100 Node Routing</li>
+            </ul>
+            <button class="deploy-btn primary" onclick="deployAgent('swarm')">Initialize Swarm Matrix</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Deployments -->
+      <section class="active-instances">
+        <h2>Active Fleet Deployments</h2>
+        <div class="instances-grid" id="instances-container">
+          <!-- Dynamic Server Cards go here -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
