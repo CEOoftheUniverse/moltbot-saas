@@ -1,11 +1,12 @@
 {
   "name": "moltbot-cloud",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "MoltBot Cloud — AI Agent VMs, pre-installed and ready to deploy",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test test/"
   },
   "keywords": [
     "ai",
@@ -19,6 +20,8 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^4.22.1",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "stripe": "^22.0.1"
   },

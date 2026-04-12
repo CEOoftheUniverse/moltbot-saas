@@ -1,0 +1,7 @@
+2026-04-12T11:52:38: 
+🤖 MoltBot Cloud Backend v0.3.0 on http://localhost:3000
+2026-04-12T11:52:38:    Stripe:    ⚠️  not configured (waitlist-only mode)
+2026-04-12T11:52:38:    Security:  ✅ helmet + rate limiting enabled
+2026-04-12T11:52:38:    Waitlist:  4 subscribers
+2026-04-12T11:52:38:    Instances: 0 active
+

@@ -16,6 +16,8 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -63,6 +65,23 @@ let instances = loadJson('instances.json', []);
 function persistInstances() { saveJson('instances.json', instances); }
 
 // ---------------------------------------------------------------------------
+// Metrics (in-memory counters)
+// ---------------------------------------------------------------------------
+const metrics = {
+  requests: 0,
+  errors: 0,
+  deployments: 0,
+  waitlistSignups: 0,
+  startedAt: new Date().toISOString(),
+};
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+// ---------------------------------------------------------------------------
 // Stripe webhook needs raw body — must be registered BEFORE json middleware
 // ---------------------------------------------------------------------------
 app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
@@ -71,21 +90,75 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), hand
 // Middleware
 // ---------------------------------------------------------------------------
 app.use(cors({ origin: [FRONTEND_ORIGIN, 'http://localhost:3000', 'http://localhost:5173'] }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Request counter
+app.use((req, _res, next) => { metrics.requests++; next(); });
+
+// ---------------------------------------------------------------------------
+// Rate Limiters
+// ---------------------------------------------------------------------------
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+const deployLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 deploys per hour per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Deploy rate limit reached.' },
+});
+
+const waitlistLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many signups from this IP.' },
+});
+
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many checkout attempts.' },
+});
+
+app.use('/api/', globalLimiter);
 
 // Serve index.html for root
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ===== HEALTH =====
 app.get('/api/status', (_req, res) => {
+  const memUsage = process.memoryUsage();
   res.json({
     status: 'ok',
-    version: '0.2.0',
+    version: '0.3.0',
     activeInstances: instances.length,
     availableGpus: { rtx4090: 24, a100: 4, h100: 2 },
     stripeConfigured: !!STRIPE_SECRET_KEY,
     waitlistCount: loadJson('waitlist.json', []).length,
+    metrics: {
+      totalRequests: metrics.requests,
+      totalErrors: metrics.errors,
+      deployments: metrics.deployments,
+      waitlistSignups: metrics.waitlistSignups,
+      startedAt: metrics.startedAt,
+    },
+    memory: {
+      rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
+    },
+    uptime: process.uptime(),
+    node: process.version,
   });
 });
 
@@ -107,9 +180,13 @@ app.get('/api/instances', async (_req, res) => {
   res.json({ instances });
 });
 
-app.post('/api/deploy', async (req, res) => {
+app.post('/api/deploy', deployLimiter, async (req, res) => {
   const { plan } = req.body;
   if (!plan) return res.status(400).json({ error: 'Missing plan type' });
+  // Validate plan
+  if (!['base', 'swarm', 'enterprise'].includes(plan)) {
+    return res.status(400).json({ error: 'Invalid plan. Must be: base, swarm, or enterprise' });
+  }
 
   try {
     const response = await fetch(`${PYTHON_API}/jobs`, {
@@ -135,6 +212,7 @@ app.post('/api/deploy', async (req, res) => {
 
     instances.push(newInstance);
     persistInstances();
+    metrics.deployments++;
     res.json({ success: true, instance: newInstance });
   } catch (error) {
     console.error('FastAPI deployment failed:', error);
@@ -143,31 +221,36 @@ app.post('/api/deploy', async (req, res) => {
 });
 
 // ===== WAITLIST =====
-app.post('/api/waitlist', (req, res) => {
+app.post('/api/waitlist', waitlistLimiter, (req, res) => {
   const { email, tier, referral } = req.body;
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid email required' });
   }
 
   const waitlist = loadJson('waitlist.json', []);
-  const normalized = email.toLowerCase().trim();
+  const normalized = email.toLowerCase().trim().slice(0, 254);
   const exists = waitlist.find(w => w.email === normalized);
 
   if (exists) {
     return res.json({ success: true, message: 'Already on the waitlist!', position: waitlist.indexOf(exists) + 1, total: waitlist.length });
   }
 
+  // Sanitize inputs
+  const cleanTier = ['base', 'swarm', 'enterprise'].includes(tier) ? tier : 'base';
+  const cleanReferral = referral ? String(referral).slice(0, 100) : null;
+
   waitlist.push({
     email: normalized,
-    tier: tier || 'base',
-    referral: referral || null,
+    tier: cleanTier,
+    referral: cleanReferral,
     source: 'moltbot-saas',
     joinedAt: new Date().toISOString(),
     notified: false,
   });
   saveJson('waitlist.json', waitlist);
+  metrics.waitlistSignups++;
 
-  console.log(`[Waitlist] +1: ${normalized} (${tier || 'base'}) — total: ${waitlist.length}`);
+  console.log(`[Waitlist] +1: ${normalized} (${cleanTier}) — total: ${waitlist.length}`);
   res.json({ success: true, message: 'You\'re on the list!', position: waitlist.length, total: waitlist.length });
 });
 
@@ -177,7 +260,7 @@ app.get('/api/waitlist/count', (_req, res) => {
 });
 
 // ===== BILLING: Stripe =====
-app.post('/api/billing/checkout', async (req, res) => {
+app.post('/api/billing/checkout', checkoutLimiter, async (req, res) => {
   const s = getStripe();
   if (!s) {
     return res.status(503).json({ error: 'Stripe not configured. Set STRIPE_SECRET_KEY.', hint: 'stripe_not_configured' });
@@ -290,10 +373,38 @@ app.post('/api/billing/portal', async (req, res) => {
   }
 });
 
+// ===== ERROR HANDLER =====
+app.use((err, _req, res, _next) => {
+  metrics.errors++;
+  console.error(`[ERROR] ${new Date().toISOString()}:`, err.message);
+  res.status(err.status || 500).json({ error: 'Internal server error' });
+});
+
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // ===== START =====
-app.listen(PORT, () => {
-  console.log(`\n🤖 MoltBot Cloud Backend v0.2.0 on http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`\n🤖 MoltBot Cloud Backend v0.3.0 on http://localhost:${PORT}`);
   console.log(`   Stripe:    ${STRIPE_SECRET_KEY ? '✅ configured' : '⚠️  not configured (waitlist-only mode)'}`);
+  console.log(`   Security:  ✅ helmet + rate limiting enabled`);
   console.log(`   Waitlist:  ${loadJson('waitlist.json', []).length} subscribers`);
   console.log(`   Instances: ${instances.length} active\n`);
 });
+
+// Graceful shutdown
+function shutdown(signal) {
+  console.log(`\n[${signal}] Shutting down gracefully...`);
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+  setTimeout(() => { process.exit(1); }, 10000);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Export for testing
+module.exports = { app, server };
