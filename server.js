@@ -451,9 +451,15 @@ app.use((_req, res) => {
 // ===== START =====
 const server = app.listen(PORT, () => {
   console.log(`\n🤖 MoltBot Cloud Backend v0.3.0 on http://localhost:${PORT}`);
-  console.log(`   Stripe:    ${STRIPE_SECRET_KEY ? '✅ configured' : '⚠️  not configured (waitlist-only mode)'}`);
-  console.log(`   Security:  ✅ helmet + rate limiting enabled`);
+  console.log(`   Stripe:    ${STRIPE_SECRET_KEY ? '✅ configured' : '⚠️  not configured'}`);
+  if (!STRIPE_SECRET_KEY) {
+    console.log(`   → To enable payments: node scripts/stripe_setup.js`);
+    console.log(`   → Or set: STRIPE_SECRET_KEY=sk_test_xxx`);
+  }
+  console.log(`   Vast.ai:   ${process.env.VASTAI_API_KEY ? '✅ live GPU provisioning' : '⚠️  mock mode'}`);
+  console.log(`   Security:  ✅ helmet + rate limiting`);
   console.log(`   Waitlist:  ${loadJson('waitlist.json', []).length} subscribers`);
+  console.log(`   GPU routes: /api/gpu/search, /api/gpu/cheapest/:tier`);
   console.log(`   Instances: ${instances.length} active\n`);
 });
 
