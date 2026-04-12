@@ -436,6 +436,45 @@ app.post('/api/gpu/provision', deployLimiter, async (req, res) => {
   }
 });
 
+// ===== STRIPE ADMIN SETUP =====
+app.post('/api/admin/stripe-setup', async (req, res) => {
+  const { key } = req.body;
+  if (!key || !key.startsWith('sk_')) return res.status(400).json({ error: 'Invalid Stripe key' });
+  
+  try {
+    const s = require('stripe')(key);
+    const products = [];
+    
+    const tiers = [
+      { name: 'MoltBot Base', price: 4900, tier: 'base' },
+      { name: 'MoltBot Swarm', price: 14900, tier: 'swarm' },
+      { name: 'MoltBot Enterprise', price: 29900, tier: 'enterprise' },
+      { name: 'Omnisphere API', price: 1000, tier: 'omnisphere' },
+    ];
+    
+    for (const t of tiers) {
+      const product = await s.products.create({ name: t.name, metadata: { tier: t.tier } });
+      const price = await s.prices.create({
+        product: product.id, unit_amount: t.price, currency: 'usd',
+        recurring: { interval: 'month' }, metadata: { tier: t.tier },
+      });
+      products.push({ name: t.name, productId: product.id, priceId: price.id, amount: `$${(t.price/100).toFixed(0)}/mo` });
+    }
+    
+    // Save price IDs
+    saveJson('stripe_config.json', { key: key.slice(0,12) + '...', products, createdAt: new Date().toISOString() });
+    
+    // Update runtime config
+    PRICE_IDS.base = products.find(p => p.name.includes('Base'))?.priceId || '';
+    PRICE_IDS.swarm = products.find(p => p.name.includes('Swarm'))?.priceId || '';
+    PRICE_IDS.enterprise = products.find(p => p.name.includes('Enterprise'))?.priceId || '';
+    
+    res.json({ success: true, products });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ===== ERROR HANDLER =====
 app.use((err, _req, res, _next) => {
   metrics.errors++;

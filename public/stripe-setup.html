@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoltBot Cloud — Stripe Setup Guide</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#09090b;color:#e4e4e7;padding:2rem;max-width:800px;margin:0 auto;line-height:1.8}
+h1{font-size:2rem;font-weight:700;margin-bottom:.5rem}
+h2{font-size:1.3rem;color:#6366f1;margin:2rem 0 1rem;font-weight:600}
+.step{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:1.5rem;margin:1rem 0}
+.step h3{font-size:1rem;font-weight:600;margin-bottom:.5rem}
+.step p{color:#a1a1aa;font-size:.9rem}
+code{background:rgba(99,102,241,.15);padding:.2rem .5rem;border-radius:4px;font-size:.85rem;color:#c4b5fd}
+pre{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:1rem;overflow-x:auto;margin:.5rem 0;font-size:.8rem}
+a{color:#6366f1}
+.badge{display:inline-block;background:rgba(34,197,94,.15);color:#22c55e;padding:.2rem .6rem;border-radius:6px;font-size:.75rem;font-weight:600}
+input{width:100%;padding:.6rem 1rem;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#e4e4e7;font-size:.9rem;margin:.5rem 0}
+button{background:#6366f1;color:#fff;border:none;padding:.6rem 1.5rem;border-radius:8px;font-weight:600;cursor:pointer;margin:.5rem 0}
+button:hover{background:#818cf8}
+#status{padding:1rem;border-radius:8px;margin:1rem 0;font-size:.85rem}
+.ok{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#22c55e}
+.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444}
+</style>
+</head>
+<body>
+<h1>💳 Stripe Setup</h1>
+<p style="color:#71717a;margin-bottom:2rem">Configure Stripe to accept payments for MoltBot Cloud subscriptions.</p>
+
+<div id="status" class="err">Checking Stripe status...</div>
+
+<h2>Step 1: Get Stripe API Key</h2>
+<div class="step">
+<h3>Create Stripe Account</h3>
+<p>1. Go to <a href="https://dashboard.stripe.com/register" target="_blank">dashboard.stripe.com/register</a><br>
+2. Create a free account (test mode is fine to start)<br>
+3. Go to <a href="https://dashboard.stripe.com/test/apikeys" target="_blank">Developers → API Keys</a><br>
+4. Copy your <strong>Secret key</strong> (starts with <code>sk_test_</code>)</p>
+</div>
+
+<h2>Step 2: Enter Key</h2>
+<div class="step">
+<h3>Set API Key</h3>
+<input type="password" id="stripeKey" placeholder="sk_test_51... (paste your Stripe secret key)">
+<button onclick="setKey()">Save & Create Products</button>
+<p style="font-size:.75rem;color:#52525b">This saves the key as an environment variable and creates subscription products in Stripe.</p>
+</div>
+
+<h2>Step 3: Webhook (Optional)</h2>
+<div class="step">
+<h3>Forward webhooks for real-time subscription events</h3>
+<pre>stripe listen --forward-to http://localhost:3000/api/billing/webhook</pre>
+<p>This lets MoltBot Cloud handle subscription created/cancelled/failed events in real time.</p>
+</div>
+
+<h2>Products That Will Be Created</h2>
+<div class="step">
+<table style="width:100%;font-size:.85rem">
+<tr><td>🟢 <strong>MoltBot Base</strong></td><td>$49/mo</td><td>1 agent VM, smart routing</td></tr>
+<tr><td>🔵 <strong>MoltBot Swarm</strong></td><td>$149/mo</td><td>3 agent VMs, Mission Control</td></tr>
+<tr><td>🟣 <strong>MoltBot Enterprise</strong></td><td>$299/mo</td><td>10 VMs, A100, custom</td></tr>
+<tr><td>⚡ <strong>Omnisphere API</strong></td><td>$10/mo</td><td>Multi-LLM API credits</td></tr>
+</table>
+</div>
+
+<div id="result" style="display:none"></div>
+
+<script>
+async function checkStatus() {
+    try {
+        const r = await fetch('/api/status');
+        const d = await r.json();
+        const el = document.getElementById('status');
+        if (d.stripeConfigured) {
+            el.className = 'ok';
+            el.innerHTML = '✅ Stripe is configured and active! Payments are live.';
+        } else {
+            el.className = 'err';
+            el.innerHTML = '⚠️ Stripe not configured. Follow the steps below to enable payments.';
+        }
+    } catch(e) {
+        document.getElementById('status').innerHTML = 'Cannot reach backend. Is the server running on port 3000?';
+    }
+}
+
+async function setKey() {
+    const key = document.getElementById('stripeKey').value.trim();
+    if (!key.startsWith('sk_')) { alert('Key must start with sk_test_ or sk_live_'); return; }
+    
+    const resultEl = document.getElementById('result');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<p>Setting key and creating products...</p>';
+    
+    try {
+        // Save key via admin endpoint
+        const r = await fetch('/api/admin/stripe-setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key }),
+        });
+        const d = await r.json();
+        if (d.success) {
+            resultEl.className = 'ok';
+            resultEl.innerHTML = `<p>✅ Stripe configured! Products created:</p><pre>${JSON.stringify(d.products, null, 2)}</pre>`;
+        } else {
+            resultEl.className = 'err';
+            resultEl.innerHTML = `<p>❌ Error: ${d.error}</p>`;
+        }
+    } catch(e) {
+        resultEl.className = 'err';
+        resultEl.innerHTML = `<p>❌ Request failed: ${e.message}</p><p>Run manually: <code>node scripts/stripe_setup.js</code></p>`;
+    }
+    checkStatus();
+}
+
+checkStatus();
+</script>
+</body>
+</html>
