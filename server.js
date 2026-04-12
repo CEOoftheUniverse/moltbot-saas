@@ -373,6 +373,69 @@ app.post('/api/billing/portal', async (req, res) => {
   }
 });
 
+// ===== VAST.AI GPU MARKETPLACE =====
+let vastai;
+try { vastai = require('./lib/providers/vastai'); } catch { vastai = null; }
+
+app.get('/api/gpu/search', async (req, res) => {
+  if (!vastai || !process.env.VASTAI_API_KEY) {
+    // Return realistic mock data when API key not set
+    return res.json({ offers: [
+      { id: 'mock-1', gpu: 'RTX 4090', gpu_ram: 24, cpu_cores: 16, ram: 64, disk: 100, price_hr: 0.29, price_mo: '211.70', location: 'US-East', reliability: 0.99 },
+      { id: 'mock-2', gpu: 'RTX 3090', gpu_ram: 24, cpu_cores: 8, ram: 32, disk: 50, price_hr: 0.15, price_mo: '109.50', location: 'EU-West', reliability: 0.97 },
+      { id: 'mock-3', gpu: 'A100 SXM', gpu_ram: 80, cpu_cores: 32, ram: 128, disk: 200, price_hr: 1.10, price_mo: '803.00', location: 'US-West', reliability: 0.99 },
+    ], source: 'mock', hint: 'Set VASTAI_API_KEY for live marketplace data' });
+  }
+  try {
+    const offers = await vastai.searchInstances({
+      gpu: req.query.gpu || undefined,
+      minRam: parseInt(req.query.minRam) || 16,
+      maxPrice: parseFloat(req.query.maxPrice) || 2.0,
+      type: req.query.type || 'on-demand',
+    });
+    res.json({ offers, source: 'live' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/gpu/cheapest/:tier', async (req, res) => {
+  if (!vastai || !process.env.VASTAI_API_KEY) {
+    const tierPrices = { base: 0.15, swarm: 0.42, enterprise: 1.10 };
+    return res.json({ cheapest: { gpu: 'Mock GPU', price_hr: tierPrices[req.params.tier] || 0.15 }, source: 'mock' });
+  }
+  try {
+    const cheapest = await vastai.getCheapestForTier(req.params.tier);
+    res.json({ cheapest, source: 'live' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/gpu/provision', deployLimiter, async (req, res) => {
+  if (!vastai || !process.env.VASTAI_API_KEY) {
+    return res.status(503).json({ error: 'GPU provisioning not configured. Set VASTAI_API_KEY.' });
+  }
+  const { offerId, tier, label } = req.body;
+  if (!offerId) return res.status(400).json({ error: 'offerId required' });
+  try {
+    const result = await vastai.provisionInstance(offerId, { label: label || `moltbot-${tier || 'base'}` });
+    instances.push({
+      id: `vast-${result.new_contract}`,
+      vastId: result.new_contract,
+      plan: tier || 'base',
+      status: 'provisioning',
+      provider: 'vast.ai',
+      createdAt: new Date().toISOString(),
+    });
+    persistInstances();
+    metrics.deployments++;
+    res.json({ success: true, instance: result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ===== ERROR HANDLER =====
 app.use((err, _req, res, _next) => {
   metrics.errors++;
