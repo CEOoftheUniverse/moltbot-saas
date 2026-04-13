@@ -5,3 +5,14 @@
 2026-04-12T11:52:38:    Waitlist:  4 subscribers
 2026-04-12T11:52:38:    Instances: 0 active
 
+2026-04-12T16:11:28: 
+🤖 MoltBot Cloud Backend v0.3.0 on http://localhost:3000
+2026-04-12T16:11:28:    Stripe:    ⚠️  not configured
+2026-04-12T16:11:28:    → To enable payments: node scripts/stripe_setup.js
+2026-04-12T16:11:28:    → Or set: STRIPE_SECRET_KEY=sk_test_xxx
+2026-04-12T16:11:28:    Vast.ai:   ⚠️  mock mode
+2026-04-12T16:11:28:    Security:  ✅ helmet + rate limiting
+2026-04-12T16:11:28:    Waitlist:  4 subscribers
+2026-04-12T16:11:28:    GPU routes: /api/gpu/search, /api/gpu/cheapest/:tier
+2026-04-12T16:11:28:    Instances: 0 active
+

@@ -72,6 +72,8 @@ const metrics = {
   errors: 0,
   deployments: 0,
   waitlistSignups: 0,
+  emailSubscribers: 0,
+  pageViews: 0,
   startedAt: new Date().toISOString(),
 };
 
@@ -257,6 +259,338 @@ app.post('/api/waitlist', waitlistLimiter, (req, res) => {
 app.get('/api/waitlist/count', (_req, res) => {
   const count = loadJson('waitlist.json', []).length;
   res.json({ count });
+});
+
+// ===== ANALYTICS TRACKING =====
+const analyticsLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 60,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Rate limited' },
+});
+
+app.post('/api/analytics/event', analyticsLimiter, (req, res) => {
+  const { event, page, referrer, sessionId, meta } = req.body;
+  if (!event) return res.status(400).json({ error: 'Event name required' });
+
+  const events = loadJson('analytics.json', []);
+  events.push({
+    event: String(event).slice(0, 50),
+    page: String(page || '').slice(0, 200),
+    referrer: String(referrer || '').slice(0, 200),
+    sessionId: String(sessionId || '').slice(0, 64),
+    meta: typeof meta === 'object' ? JSON.stringify(meta).slice(0, 500) : null,
+    ip: req.ip,
+    ua: String(req.headers['user-agent'] || '').slice(0, 200),
+    timestamp: new Date().toISOString(),
+  });
+  // Keep last 10,000 events only
+  if (events.length > 10000) events.splice(0, events.length - 10000);
+  saveJson('analytics.json', events);
+  metrics.pageViews++;
+  res.json({ ok: true });
+});
+
+app.get('/api/analytics/summary', (_req, res) => {
+  const events = loadJson('analytics.json', []);
+  const now = Date.now();
+  const last24h = events.filter(e => now - new Date(e.timestamp).getTime() < 86400000);
+  const pageViews = last24h.filter(e => e.event === 'page_view').length;
+  const signupClicks = last24h.filter(e => e.event === 'signup_click').length;
+  const checkoutStarts = last24h.filter(e => e.event === 'checkout_start').length;
+  const topPages = {};
+  last24h.forEach(e => { if (e.page) topPages[e.page] = (topPages[e.page] || 0) + 1; });
+  res.json({ period: '24h', pageViews, signupClicks, checkoutStarts, topPages, totalEvents: events.length });
+});
+
+// ===== EMAIL SEQUENCES =====
+const EMAIL_DRIP_SEQUENCE = [
+  { day: 0, subject: 'Welcome to MoltBot Cloud! 🤖', template: 'welcome' },
+  { day: 1, subject: 'Quick Start: Deploy your first AI agent in 60 seconds', template: 'quick_start' },
+  { day: 3, subject: '3 ways MoltBot agents save developers 10hrs/week', template: 'value_prop' },
+  { day: 5, subject: 'See how Company X ships 300 commits/day with MoltBot', template: 'case_study' },
+  { day: 7, subject: 'Your 7-day trial is ending — lock in early access pricing', template: 'trial_ending' },
+  { day: 14, subject: 'Last chance: 20% OFF your first 3 months', template: 'discount_offer' },
+];
+
+app.post('/api/email/subscribe', waitlistLimiter, (req, res) => {
+  const { email, source, referral } = req.body;
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+
+  const subscribers = loadJson('email_subscribers.json', []);
+  const normalized = email.toLowerCase().trim().slice(0, 254);
+  const exists = subscribers.find(s => s.email === normalized);
+  if (exists) return res.json({ success: true, message: 'Already subscribed!' });
+
+  const now = new Date();
+  const drip = EMAIL_DRIP_SEQUENCE.map(step => ({
+    ...step,
+    scheduledFor: new Date(now.getTime() + step.day * 86400000).toISOString(),
+    sent: false,
+  }));
+
+  subscribers.push({
+    email: normalized,
+    source: String(source || 'website').slice(0, 50),
+    referral: referral ? String(referral).slice(0, 100) : null,
+    subscribedAt: now.toISOString(),
+    drip,
+    unsubscribed: false,
+  });
+  saveJson('email_subscribers.json', subscribers);
+  metrics.emailSubscribers++;
+
+  // Also add to waitlist if not there
+  const waitlist = loadJson('waitlist.json', []);
+  if (!waitlist.find(w => w.email === normalized)) {
+    waitlist.push({ email: normalized, tier: 'base', referral: referral || null, source: 'email_subscribe', joinedAt: now.toISOString(), notified: false });
+    saveJson('waitlist.json', waitlist);
+  }
+
+  console.log(`[Email] +1 subscriber: ${normalized} — drip scheduled (${drip.length} emails)`);
+  res.json({ success: true, message: 'Subscribed! Check your inbox.', dripScheduled: drip.length });
+});
+
+app.get('/api/email/drip/:email', (req, res) => {
+  const subscribers = loadJson('email_subscribers.json', []);
+  const sub = subscribers.find(s => s.email === req.params.email.toLowerCase().trim());
+  if (!sub) return res.status(404).json({ error: 'Not found' });
+  res.json({ email: sub.email, subscribedAt: sub.subscribedAt, drip: sub.drip });
+});
+
+app.post('/api/email/unsubscribe', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const subscribers = loadJson('email_subscribers.json', []);
+  const sub = subscribers.find(s => s.email === email.toLowerCase().trim());
+  if (sub) { sub.unsubscribed = true; saveJson('email_subscribers.json', subscribers); }
+  res.json({ success: true, message: 'Unsubscribed.' });
+});
+
+// ===== WEBHOOKS: Real-time notifications =====
+app.post('/api/webhooks', (req, res) => {
+  const { url, events, secret } = req.body;
+  if (!url || !events?.length) {
+    return res.status(400).json({ error: 'url and events[] required' });
+  }
+  const validEvents = ['waitlist.signup', 'email.subscribe', 'billing.checkout', 'alert.downtime'];
+  const filtered = events.filter(e => validEvents.includes(e));
+  if (!filtered.length) return res.status(400).json({ error: `Invalid events. Valid: ${validEvents.join(', ')}` });
+
+  const hooks = loadJson('webhooks.json', []);
+  hooks.push({
+    id: Date.now().toString(36),
+    url: String(url).slice(0, 500),
+    events: filtered,
+    secret: secret ? String(secret).slice(0, 128) : null,
+    createdAt: new Date().toISOString(),
+    active: true,
+  });
+  saveJson('webhooks.json', hooks);
+  console.log(`[Webhook] Registered: ${url} for [${filtered.join(',')}]`);
+  res.json({ success: true, id: hooks[hooks.length - 1].id, events: filtered });
+});
+
+app.get('/api/webhooks', (_req, res) => {
+  const hooks = loadJson('webhooks.json', []);
+  res.json({ webhooks: hooks.map(h => ({ id: h.id, url: h.url.slice(0, 40) + '...', events: h.events, active: h.active })) });
+});
+
+app.delete('/api/webhooks/:id', (req, res) => {
+  const hooks = loadJson('webhooks.json', []);
+  const idx = hooks.findIndex(h => h.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Webhook not found' });
+  hooks.splice(idx, 1);
+  saveJson('webhooks.json', hooks);
+  res.json({ success: true });
+});
+
+// Fire webhooks helper
+async function fireWebhooks(event, payload) {
+  const hooks = loadJson('webhooks.json', []);
+  const targets = hooks.filter(h => h.active && h.events.includes(event));
+  for (const hook of targets) {
+    try {
+      await fetch(hook.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(hook.secret ? { 'X-Webhook-Secret': hook.secret } : {}),
+        },
+        body: JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload }),
+        signal: AbortSignal.timeout(5000),
+      });
+      console.log(`[Webhook] Fired ${event} → ${hook.url.slice(0, 40)}`);
+    } catch (e) {
+      console.warn(`[Webhook] Failed ${event} → ${hook.url.slice(0, 40)}: ${e.message}`);
+    }
+  }
+}
+
+// ===== A/B TESTING FRAMEWORK =====
+app.get('/api/ab/variant', (req, res) => {
+  const { test } = req.query;
+  if (!test) return res.status(400).json({ error: 'test name required' });
+
+  const tests = loadJson('ab_tests.json', {});
+  const config = tests[test] || { variants: ['control', 'variant_a'], weights: [50, 50] };
+
+  // Deterministic assignment based on IP for consistency
+  const ip = req.ip || 'unknown';
+  const hash = ip.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  let cumulative = 0;
+  let assigned = config.variants[0];
+  const roll = hash % 100;
+  for (let i = 0; i < config.variants.length; i++) {
+    cumulative += config.weights[i];
+    if (roll < cumulative) { assigned = config.variants[i]; break; }
+  }
+
+  res.json({ test, variant: assigned, sessionHash: hash });
+});
+
+app.post('/api/ab/convert', (req, res) => {
+  const { test, variant, action } = req.body;
+  if (!test || !variant) return res.status(400).json({ error: 'test and variant required' });
+
+  const conversions = loadJson('ab_conversions.json', []);
+  conversions.push({
+    test: String(test).slice(0, 50),
+    variant: String(variant).slice(0, 50),
+    action: String(action || 'convert').slice(0, 50),
+    ip: req.ip,
+    timestamp: new Date().toISOString(),
+  });
+  if (conversions.length > 5000) conversions.splice(0, conversions.length - 5000);
+  saveJson('ab_conversions.json', conversions);
+  res.json({ ok: true });
+});
+
+app.get('/api/ab/results', (req, res) => {
+  const { test } = req.query;
+  const conversions = loadJson('ab_conversions.json', []);
+  const filtered = test ? conversions.filter(c => c.test === test) : conversions;
+  const summary = {};
+  filtered.forEach(c => {
+    if (!summary[c.test]) summary[c.test] = {};
+    if (!summary[c.test][c.variant]) summary[c.test][c.variant] = 0;
+    summary[c.test][c.variant]++;
+  });
+  res.json({ results: summary, total: filtered.length });
+});
+
+// ===== MONITORING ALERTS =====
+const MONITOR_SERVICES = [
+  { name: 'FastAPI', url: 'http://127.0.0.1:8080/health', port: 8080 },
+  { name: 'Omnisphere', url: 'http://127.0.0.1:3005/api/status', port: 3005 },
+];
+
+app.get('/api/monitor/health', async (_req, res) => {
+  const results = [];
+  for (const svc of MONITOR_SERVICES) {
+    try {
+      const r = await fetch(svc.url, { signal: AbortSignal.timeout(5000) });
+      results.push({ name: svc.name, port: svc.port, status: r.ok ? 'up' : 'degraded', httpCode: r.status });
+    } catch (e) {
+      results.push({ name: svc.name, port: svc.port, status: 'down', error: e.message.slice(0, 100) });
+      // Fire downtime webhook
+      fireWebhooks('alert.downtime', { service: svc.name, port: svc.port, error: e.message.slice(0, 100) });
+    }
+  }
+  const allUp = results.every(r => r.status === 'up');
+  res.json({ healthy: allUp, checkedAt: new Date().toISOString(), services: results });
+});
+
+app.post('/api/monitor/alert', (req, res) => {
+  const { webhook_url, services } = req.body;
+  if (!webhook_url) return res.status(400).json({ error: 'webhook_url required (Discord/Slack URL)' });
+
+  const alerts = loadJson('monitor_alerts.json', []);
+  alerts.push({
+    webhook_url: String(webhook_url).slice(0, 500),
+    services: services || MONITOR_SERVICES.map(s => s.name),
+    createdAt: new Date().toISOString(),
+    active: true,
+  });
+  saveJson('monitor_alerts.json', alerts);
+  res.json({ success: true, message: 'Alert registered. Will fire on downtime detection.' });
+});
+
+// ===== IMPROVED EMAIL TEMPLATES =====
+const EMAIL_TEMPLATES = {
+  welcome: {
+    subject: 'Welcome to MoltBot Cloud! 🤖',
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <h1 style="color:#6366f1">Welcome to MoltBot Cloud!</h1>
+      <p>You've just joined the future of software development.</p>
+      <p>Your AI agent swarm is ready to deploy. Here's what happens next:</p>
+      <ol><li>Choose your plan (Base $49 / Swarm $149 / Enterprise $299)</li>
+      <li>Deploy your VM — pre-loaded with 10+ specialist agents</li>
+      <li>Watch them code, test, review, and ship — autonomously</li></ol>
+      <a href="https://ceooftheuniverse.github.io/vmsaas-live/signup.html" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">Start Free Trial →</a>
+      <p style="color:#94a3b8;font-size:12px;margin-top:24px">You're receiving this because you signed up for MoltBot Cloud. <a href="https://ceooftheuniverse.github.io/vmsaas-live/api-docs.html" style="color:#6366f1">Unsubscribe</a></p>
+    </div>`,
+  },
+  quick_start: {
+    subject: 'Deploy your first AI agent in 60 seconds ⚡',
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <h1 style="color:#06b6d4">60-Second Quick Start</h1>
+      <p>Yesterday you joined MoltBot Cloud. Today, let's deploy your first agent.</p>
+      <h3>Step 1: Sign in</h3><p>Head to your <a href="https://ceooftheuniverse.github.io/vmsaas-live/dashboard.html" style="color:#6366f1">Dashboard</a></p>
+      <h3>Step 2: Deploy</h3><p>Click "Deploy Node" — your VM comes pre-loaded with Claude, GPT-4o, and Gemini</p>
+      <h3>Step 3: Ship</h3><p>Describe your project, and watch 5 agents tackle it in parallel</p>
+      <a href="https://ceooftheuniverse.github.io/vmsaas-live/signup.html" style="display:inline-block;background:#06b6d4;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">Deploy Now →</a>
+    </div>`,
+  },
+  value_prop: {
+    subject: '3 ways MoltBot agents save you 10hrs/week',
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <h1>Save 10 Hours Every Week</h1>
+      <p>Developers using MoltBot Cloud report massive productivity gains:</p>
+      <ul><li><strong>Parallel Code Generation</strong> — 5 agents write code simultaneously</li>
+      <li><strong>Automated Testing</strong> — agents write and run tests before you review</li>
+      <li><strong>Smart Model Routing</strong> — pay GPT-4o prices, get 12 models included</li></ul>
+      <p>The result? 300+ commits/day with one developer.</p>
+      <a href="https://ceooftheuniverse.github.io/vmsaas-live/blog-ai-agent-swarm-guide.html" style="display:inline-block;background:#22c55e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">Read the Full Guide →</a>
+    </div>`,
+  },
+  trial_ending: {
+    subject: 'Your 7-day trial is ending — lock in early access pricing 🔒',
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <h1 style="color:#f59e0b">⏰ Your Trial Ends Tomorrow</h1>
+      <p>You've been exploring MoltBot Cloud for 7 days. Here's what you'd lose:</p>
+      <ul><li>5+ AI agents working 24/7 on your code</li>
+      <li>12 LLM models with smart routing</li>
+      <li>Persistent memory across sessions</li></ul>
+      <p><strong>Lock in early access pricing before it's gone.</strong></p>
+      <a href="https://ceooftheuniverse.github.io/vmsaas-live/signup.html" style="display:inline-block;background:#f59e0b;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">Upgrade Now — From $49/mo →</a>
+    </div>`,
+  },
+  discount_offer: {
+    subject: 'Last chance: 20% OFF your first 3 months 🎉',
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+      <h1 style="color:#ef4444">🎉 20% OFF — Final Offer</h1>
+      <p>We noticed you haven't upgraded yet. Here's our best deal:</p>
+      <div style="background:#18181b;border:2px solid #6366f1;border-radius:12px;padding:24px;text-align:center;margin:16px 0">
+        <div style="font-size:2rem;font-weight:bold;color:#6366f1">20% OFF</div>
+        <div style="color:#94a3b8">Your first 3 months on any plan</div>
+        <div style="color:#f4f4f5;margin-top:8px">Base: <s>$49</s> → <strong>$39/mo</strong> • Swarm: <s>$149</s> → <strong>$119/mo</strong></div>
+      </div>
+      <a href="https://ceooftheuniverse.github.io/vmsaas-live/signup.html?promo=EARLY20" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin-top:16px">Claim 20% Off →</a>
+      <p style="color:#52525b;font-size:12px;margin-top:16px">Offer expires in 48 hours.</p>
+    </div>`,
+  },
+};
+
+app.get('/api/email/templates', (_req, res) => {
+  res.json({ templates: Object.keys(EMAIL_TEMPLATES).map(k => ({ id: k, subject: EMAIL_TEMPLATES[k].subject })) });
+});
+
+app.get('/api/email/template/:id', (req, res) => {
+  const tmpl = EMAIL_TEMPLATES[req.params.id];
+  if (!tmpl) return res.status(404).json({ error: 'Template not found' });
+  res.json(tmpl);
 });
 
 // ===== BILLING: Stripe =====
