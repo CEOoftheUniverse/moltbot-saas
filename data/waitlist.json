@@ -1,34 +1,42 @@
 [
-    {
-        "email":  "test-1775975957462@example.com",
-        "tier":  "swarm",
-        "referral":  null,
-        "source":  "moltbot-saas",
-        "joinedAt":  "2026-04-12T06:39:17.465Z",
-        "notified":  false
-    },
-    {
-        "email":  "dedup-mb-1775975957467@example.com",
-        "tier":  "base",
-        "referral":  null,
-        "source":  "moltbot-saas",
-        "joinedAt":  "2026-04-12T06:39:17.470Z",
-        "notified":  false
-    },
-    {
-        "email":  "sanitize-mb-1775975957476@example.com",
-        "tier":  "base",
-        "referral":  null,
-        "source":  "moltbot-saas",
-        "joinedAt":  "2026-04-12T06:39:17.478Z",
-        "notified":  false
-    },
-    {
-        "email":  "customer@test.com",
-        "tier":  "swarm",
-        "referral":  null,
-        "source":  "moltbot-saas",
-        "joinedAt":  "2026-04-11T21:39:12.674Z",
-        "notified":  false
-    }
+  {
+    "email": "test-1775975957462@example.com",
+    "tier": "swarm",
+    "referral": null,
+    "source": "moltbot-saas",
+    "joinedAt": "2026-04-12T06:39:17.465Z",
+    "notified": false
+  },
+  {
+    "email": "dedup-mb-1775975957467@example.com",
+    "tier": "base",
+    "referral": null,
+    "source": "moltbot-saas",
+    "joinedAt": "2026-04-12T06:39:17.470Z",
+    "notified": false
+  },
+  {
+    "email": "sanitize-mb-1775975957476@example.com",
+    "tier": "base",
+    "referral": null,
+    "source": "moltbot-saas",
+    "joinedAt": "2026-04-12T06:39:17.478Z",
+    "notified": false
+  },
+  {
+    "email": "customer@test.com",
+    "tier": "swarm",
+    "referral": null,
+    "source": "moltbot-saas",
+    "joinedAt": "2026-04-11T21:39:12.674Z",
+    "notified": false
+  },
+  {
+    "email": "test@moltbot-test.dev",
+    "tier": "base",
+    "referral": null,
+    "source": "email_subscribe",
+    "joinedAt": "2026-04-14T04:10:23.605Z",
+    "notified": false
+  }
 ]

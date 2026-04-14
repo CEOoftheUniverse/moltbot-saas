@@ -1,0 +1,53 @@
+[
+  {
+    "email": "test@moltbot-test.dev",
+    "source": "test-suite",
+    "referral": null,
+    "subscribedAt": "2026-04-14T04:10:23.605Z",
+    "drip": [
+      {
+        "day": 0,
+        "subject": "Welcome to MoltBot Cloud! 🤖",
+        "template": "welcome",
+        "scheduledFor": "2026-04-14T04:10:23.605Z",
+        "sent": false
+      },
+      {
+        "day": 1,
+        "subject": "Quick Start: Deploy your first AI agent in 60 seconds",
+        "template": "quick_start",
+        "scheduledFor": "2026-04-15T04:10:23.605Z",
+        "sent": false
+      },
+      {
+        "day": 3,
+        "subject": "3 ways MoltBot agents save developers 10hrs/week",
+        "template": "value_prop",
+        "scheduledFor": "2026-04-17T04:10:23.605Z",
+        "sent": false
+      },
+      {
+        "day": 5,
+        "subject": "See how Company X ships 300 commits/day with MoltBot",
+        "template": "case_study",
+        "scheduledFor": "2026-04-19T04:10:23.605Z",
+        "sent": false
+      },
+      {
+        "day": 7,
+        "subject": "Your 7-day trial is ending — lock in early access pricing",
+        "template": "trial_ending",
+        "scheduledFor": "2026-04-21T04:10:23.605Z",
+        "sent": false
+      },
+      {
+        "day": 14,
+        "subject": "Last chance: 20% OFF your first 3 months",
+        "template": "discount_offer",
+        "scheduledFor": "2026-04-28T04:10:23.605Z",
+        "sent": false
+      }
+    ],
+    "unsubscribed": false
+  }
+]

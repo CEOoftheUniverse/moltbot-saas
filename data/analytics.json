@@ -1,0 +1,22 @@
+[
+  {
+    "event": "test_event",
+    "page": "/test",
+    "referrer": "",
+    "sessionId": "test-suite",
+    "meta": null,
+    "ip": "::ffff:127.0.0.1",
+    "ua": "node",
+    "timestamp": "2026-04-14T04:10:23.599Z"
+  },
+  {
+    "event": "test_event",
+    "page": "/test",
+    "referrer": "",
+    "sessionId": "test-suite",
+    "meta": null,
+    "ip": "::ffff:127.0.0.1",
+    "ua": "node",
+    "timestamp": "2026-04-14T04:11:52.560Z"
+  }
+]
