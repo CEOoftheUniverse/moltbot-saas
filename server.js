@@ -253,6 +253,7 @@ app.post('/api/waitlist', waitlistLimiter, (req, res) => {
   metrics.waitlistSignups++;
 
   console.log(`[Waitlist] +1: ${normalized} (${cleanTier}) — total: ${waitlist.length}`);
+  if (typeof fireWebhooks === 'function') fireWebhooks('waitlist.signup', { email: normalized, tier: cleanTier, referral: cleanReferral });
   res.json({ success: true, message: 'You\'re on the list!', position: waitlist.length, total: waitlist.length });
 });
 
@@ -834,6 +835,72 @@ const server = app.listen(PORT, () => {
   console.log(`   Waitlist:  ${loadJson('waitlist.json', []).length} subscribers`);
   console.log(`   GPU routes: /api/gpu/search, /api/gpu/cheapest/:tier`);
   console.log(`   Instances: ${instances.length} active\n`);
+});
+
+// ---------------------------------------------------------------------------
+// Referral / Affiliate Tracking
+// ---------------------------------------------------------------------------
+const referrals = loadJson('referrals.json', []);
+
+// Register a new affiliate
+app.post('/api/referral/register', express.json(), (req, res) => {
+  const { email, name } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const normalized = email.toLowerCase().trim();
+  
+  const existing = referrals.find(r => r.email === normalized);
+  if (existing) return res.json({ success: true, code: existing.code, message: 'Already registered' });
+  
+  const code = 'MOLT-' + normalized.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const affiliate = {
+    email: normalized,
+    name: name || '',
+    code,
+    clicks: 0,
+    signups: 0,
+    conversions: 0,
+    earnings: 0,
+    registeredAt: new Date().toISOString(),
+  };
+  referrals.push(affiliate);
+  saveJson('referrals.json', referrals);
+  console.log(`[Referral] New affiliate: ${normalized} → ${code}`);
+  res.json({ success: true, code, link: `https://ceooftheuniverse.github.io/vmsaas-live/signup.html?ref=${code}` });
+});
+
+// Track a referral click
+app.post('/api/referral/click', express.json(), (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Code required' });
+  const affiliate = referrals.find(r => r.code === code);
+  if (affiliate) {
+    affiliate.clicks++;
+    saveJson('referrals.json', referrals);
+  }
+  res.json({ success: true });
+});
+
+// Get affiliate stats by code
+app.get('/api/referral/stats/:code', (req, res) => {
+  const affiliate = referrals.find(r => r.code === req.params.code);
+  if (!affiliate) return res.status(404).json({ error: 'Affiliate not found' });
+  res.json({
+    code: affiliate.code,
+    clicks: affiliate.clicks,
+    signups: affiliate.signups,
+    conversions: affiliate.conversions,
+    earnings: affiliate.earnings,
+    registeredAt: affiliate.registeredAt,
+  });
+});
+
+// List top affiliates (admin)
+app.get('/api/referral/leaderboard', (_req, res) => {
+  const top = [...referrals]
+    .sort((a, b) => b.conversions - a.conversions)
+    .slice(0, 20)
+    .map(r => ({ name: r.name || r.email.split('@')[0], conversions: r.conversions, earnings: r.earnings }));
+  res.json({ total: referrals.length, top });
 });
 
 // Graceful shutdown
