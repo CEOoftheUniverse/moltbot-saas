@@ -34,6 +34,7 @@ const PRICE_IDS = {
   base:       process.env.STRIPE_BASE_PRICE_ID || '',       // $49/mo
   swarm:      process.env.STRIPE_SWARM_PRICE_ID || '',      // $149/mo
   enterprise: process.env.STRIPE_ENTERPRISE_PRICE_ID || '', // $299/mo
+  copilot:    process.env.STRIPE_COPILOT_PRICE_ID || '',    // $50/mo
 };
 
 // Shared Python API endpoint (Agent Cowork)
@@ -601,7 +602,7 @@ app.post('/api/billing/checkout', checkoutLimiter, async (req, res) => {
     return res.status(503).json({ error: 'Stripe not configured. Set STRIPE_SECRET_KEY.', hint: 'stripe_not_configured' });
   }
 
-  const { email, tier } = req.body; // tier: 'base' | 'swarm' | 'enterprise'
+  const { email, tier, copilotAddon } = req.body; // tier: 'base' | 'swarm' | 'enterprise'
   if (!email) return res.status(400).json({ error: 'Email required for checkout' });
 
   const priceId = PRICE_IDS[tier];
@@ -609,14 +610,19 @@ app.post('/api/billing/checkout', checkoutLimiter, async (req, res) => {
     return res.status(503).json({ error: `Price ID not configured for tier: ${tier}. Set STRIPE_${tier.toUpperCase()}_PRICE_ID.` });
   }
 
+  const lineItems = [{ price: priceId, quantity: 1 }];
+  if (copilotAddon && PRICE_IDS.copilot) {
+    lineItems.push({ price: PRICE_IDS.copilot, quantity: 1 });
+  }
+
   try {
     const session = await s.checkout.sessions.create({
       mode: 'subscription',
       customer_email: email,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       success_url: `${FRONTEND_ORIGIN}/moltbot-saas/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${FRONTEND_ORIGIN}/moltbot-saas/?checkout=cancel`,
-      metadata: { tier, source: 'moltbot-saas' },
+      metadata: { tier, copilot: copilotAddon ? 'true' : 'false', source: 'moltbot-saas' },
     });
 
     res.json({ url: session.url, sessionId: session.id });
@@ -784,6 +790,7 @@ app.post('/api/admin/stripe-setup', async (req, res) => {
       { name: 'MoltBot Base', price: 4900, tier: 'base' },
       { name: 'MoltBot Swarm', price: 14900, tier: 'swarm' },
       { name: 'MoltBot Enterprise', price: 29900, tier: 'enterprise' },
+      { name: 'MoltBot Copilot IDE', price: 5000, tier: 'copilot' },
       { name: 'Omnisphere API', price: 1000, tier: 'omnisphere' },
     ];
     
